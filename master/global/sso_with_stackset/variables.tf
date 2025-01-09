@@ -27,15 +27,3 @@ variable "session_name" {
   type        = any
   description = "Session name for role"
 }
-
-# variable "permission_sets" {
-#   type = map(object({
-#     name = string,
-#     description = string,
-#     principal_id = string,
-#     iam_policy_json = optional(string),
-#     target_ids = list(string)
-#   }))
-
-#   description = "permission set"
-# }
