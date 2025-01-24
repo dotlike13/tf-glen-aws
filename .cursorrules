@@ -1,0 +1,19 @@
+- Name 변수를 사용할땐 format() 형식으로 사용해.
+
+- 폴더 및 파일구조는 아래를 참고해서 생성하도록 해.
+  - <service name> 은 서비스 이름을 넣어줘. 예를들어 VPC, WAF, TGW, NFW 등등을 의미해
+# 폴더 및 파일 구조
+master/
+└── global/
+    └── <serivce name>/
+        ├── backend.tf
+        ├── locals.tf
+        ├── main.tf
+        ├── provider.tf
+        ├── variables.tf
+        └── module/
+            ├── main.tf
+            ├── variables.tf
+            └── outputs.tf
+
+
