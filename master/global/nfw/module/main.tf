@@ -1,6 +1,6 @@
 # Gateway Load Balancer
 resource "aws_lb" "gwlb" {
-  name               = "${var.prefix}-gwlb"
+  name               = format("%s-%s", var.name, "gwlb")
   load_balancer_type = "gateway"
   subnets            = var.firewall_subnet_ids
 
@@ -9,7 +9,7 @@ resource "aws_lb" "gwlb" {
 
 # Gateway Load Balancer Target Group
 resource "aws_lb_target_group" "nfw" {
-  name        = "${var.prefix}-nfw-tg"
+  name        = format("%s-%s", var.name, "nfw-tg")
   port        = 6081
   protocol    = "GENEVE"
   target_type = "ip"
@@ -23,7 +23,7 @@ resource "aws_lb_target_group" "nfw" {
 
 # Network Firewall
 resource "aws_networkfirewall_firewall" "main" {
-  name                = "${var.prefix}-nfw"
+  name                = format("%s-%s", var.name, "nfw")
   firewall_policy_arn = aws_networkfirewall_firewall_policy.main.arn
   vpc_id             = var.security_vpc_id
   
@@ -45,7 +45,7 @@ resource "aws_vpc_endpoint" "ingress" {
   vpc_id            = var.security_vpc_id
 
   tags = merge(var.tags, {
-    Name = "${var.prefix}-gwlbe-ingress"
+    Name = format("%s-%s", var.name, "gwlbe-ingress")
   })
 }
 
@@ -56,7 +56,7 @@ resource "aws_vpc_endpoint" "egress" {
   vpc_id            = var.security_vpc_id
 
   tags = merge(var.tags, {
-    Name = "${var.prefix}-gwlbe-egress"
+    Name = format("%s-%s", var.name, "gwlbe-egress")
   })
 }
 
@@ -67,13 +67,13 @@ resource "aws_vpc_endpoint" "east_west" {
   vpc_id            = var.security_vpc_id
 
   tags = merge(var.tags, {
-    Name = "${var.prefix}-gwlbe-east-west"
+    Name = format("%s-%s", var.name, "gwlbe-east-west")
   })
 }
 
 # Firewall Policy
 resource "aws_networkfirewall_firewall_policy" "main" {
-  name = "${var.prefix}-policy"
+  name = format("%s-%s", var.name, "policy")
 
   firewall_policy {
     stateless_default_actions          = ["aws:forward_to_sfe"]
@@ -90,7 +90,7 @@ resource "aws_networkfirewall_firewall_policy" "main" {
 # Rule Groups
 resource "aws_networkfirewall_rule_group" "block_domains" {
   capacity = 100
-  name     = "${var.prefix}-domain-block"
+  name     = format("%s-%s", var.name, "domain-block")
   type     = "STATEFUL"
   rule_group {
     rules_source {
@@ -103,4 +103,4 @@ resource "aws_networkfirewall_rule_group" "block_domains" {
   }
 
   tags = var.tags
-} 
+}

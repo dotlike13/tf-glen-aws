@@ -1,3 +1,8 @@
+variable "name" {
+  type        = string
+  description = "Name prefix for all resources"
+}
+
 variable "prefix" {
   type        = string
   description = "Prefix for all resources"

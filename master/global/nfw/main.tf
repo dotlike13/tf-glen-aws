@@ -1,21 +1,17 @@
 module "network_firewall" {
-  source = "./modules/nfw"
+  source = "./module"
 
-  prefix           = "prod"
-  security_vpc_id  = "vpc-1234567890"
+  name            = "test-nfw"
+  security_vpc_id = module.security_vpc.vpc_id
   
-  firewall_subnet_ids   = ["subnet-firewall1", "subnet-firewall2"]
-  ingress_subnet_ids    = ["subnet-ingress1", "subnet-ingress2"]
-  egress_subnet_ids     = ["subnet-egress1", "subnet-egress2"]
-  east_west_subnet_ids  = ["subnet-eastwest1", "subnet-eastwest2"]
-  
-  blocked_domains = [
-    "malicious-site.com",
-    "bad-domain.com"
-  ]
+  prefix = "test"
 
-  tags = {
-    Environment = "Production"
-    Project     = "Security"
-  }
-} 
+  firewall_subnet_ids   = module.security_vpc.private_subnet_ids
+  ingress_subnet_ids    = module.security_vpc.gwlbe_ingress_subnet_ids
+  egress_subnet_ids     = module.security_vpc.gwlbe_egress_subnet_ids
+  east_west_subnet_ids  = module.security_vpc.gwlbe_east_west_subnet_ids
+
+  tags = merge(local.default_tags, {
+    Name = format("%s%s-%s", var.prefix, var.env, var.purpose)
+  })
+}
