@@ -37,9 +37,15 @@ resource "aws_networkfirewall_firewall" "main" {
   tags = var.tags
 }
 
+# Gateway Load Balancer VPC Endpoint Service
+resource "aws_vpc_endpoint_service" "gwlb" {
+  acceptance_required        = false
+  gateway_load_balancer_arns = [aws_lb.gwlb.arn]
+}
+
 # GWLB Endpoints
 resource "aws_vpc_endpoint" "ingress" {
-  service_name      = aws_lb.gwlb.vpc_endpoint_service_name
+  service_name      = aws_vpc_endpoint_service.gwlb.service_name
   subnet_ids        = var.ingress_subnet_ids
   vpc_endpoint_type = "GatewayLoadBalancer"
   vpc_id            = var.security_vpc_id
@@ -50,7 +56,7 @@ resource "aws_vpc_endpoint" "ingress" {
 }
 
 resource "aws_vpc_endpoint" "egress" {
-  service_name      = aws_lb.gwlb.vpc_endpoint_service_name
+  service_name      = aws_vpc_endpoint_service.gwlb.service_name
   subnet_ids        = var.egress_subnet_ids
   vpc_endpoint_type = "GatewayLoadBalancer"
   vpc_id            = var.security_vpc_id
@@ -61,7 +67,7 @@ resource "aws_vpc_endpoint" "egress" {
 }
 
 resource "aws_vpc_endpoint" "east_west" {
-  service_name      = aws_lb.gwlb.vpc_endpoint_service_name
+  service_name      = aws_vpc_endpoint_service.gwlb.service_name
   subnet_ids        = var.east_west_subnet_ids
   vpc_endpoint_type = "GatewayLoadBalancer"
   vpc_id            = var.security_vpc_id

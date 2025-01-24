@@ -15,7 +15,7 @@ output "gwlb_arn" {
 
 output "gwlb_endpoint_service_name" {
   description = "The service name of the Gateway Load Balancer endpoint service"
-  value       = aws_lb.gwlb.vpc_endpoint_service_name
+  value       = aws_vpc_endpoint_service.gwlb.service_name
 }
 
 output "ingress_endpoint_id" {
