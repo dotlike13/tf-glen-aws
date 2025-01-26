@@ -43,4 +43,67 @@ variable "tags" {
   type        = map(string)
   description = "Tags to apply to all resources"
   default     = {}
+}
+
+variable "enable_stateful_rule" {
+  type        = bool
+  description = "Enable stateful rule group"
+  default     = false
+}
+
+variable "enable_stateless_rule" {
+  type        = bool
+  description = "Enable stateless rule group"
+  default     = false
+}
+
+variable "stateful_rule_config" {
+  description = "Configuration for stateful rule"
+  type = object({
+    action              = string     # "PASS", "DROP", "REJECT", "ALERT"
+    source_ip           = string
+    destination_ip      = string
+    source_port        = string
+    destination_port   = string
+    protocol           = string
+    rule_order         = string     # "ACTION_ORDER" or "STRICT_ORDER"
+  })
+  default = {
+    action              = "PASS"
+    source_ip           = "ANY"
+    destination_ip      = "ANY"
+    source_port        = "ANY"
+    destination_port   = "ANY"
+    protocol           = "IP"
+    rule_order         = "ACTION_ORDER"
+  }
+
+  validation {
+    condition = contains(["PASS", "DROP", "REJECT", "ALERT"], var.stateful_rule_config.action)
+    error_message = "Action must be one of: PASS, DROP, REJECT, ALERT"
+  }
+
+  validation {
+    condition = contains(["DEFAULT_ACTION_ORDER", "STRICT_ORDER"], var.stateful_rule_config.rule_order)
+    error_message = "Rule order must be either ACTION_ORDER or STRICT_ORDER"
+  }
+}
+
+variable "stateless_rule_config" {
+  description = "Configuration for stateless rule"
+  type = object({
+    action              = string # "aws:pass", "aws:drop", "aws:forward_to_sfe"
+    source_ip           = string
+    destination_ip      = string
+  })
+  default = {
+    action              = "aws:forward_to_sfe"
+    source_ip           = "0.0.0.0/0"
+    destination_ip      = "0.0.0.0/0"
+  }
+
+  validation {
+    condition = contains(["aws:pass", "aws:drop", "aws:forward_to_sfe"], var.stateless_rule_config.action)
+    error_message = "Action must be one of: aws:pass, aws:drop, aws:forward_to_sfe"
+  }
 } 

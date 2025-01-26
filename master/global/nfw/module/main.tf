@@ -85,25 +85,91 @@ resource "aws_networkfirewall_firewall_policy" "main" {
     stateless_default_actions          = ["aws:forward_to_sfe"]
     stateless_fragment_default_actions = ["aws:forward_to_sfe"]
     
-    stateful_rule_group_reference {
-      resource_arn = aws_networkfirewall_rule_group.block_domains.arn
+    dynamic "stateful_rule_group_reference" {
+      for_each = var.enable_stateful_rule ? [1] : []
+      content {
+        resource_arn = aws_networkfirewall_rule_group.stateful[0].arn
+      }
+    }
+
+    dynamic "stateless_rule_group_reference" {
+      for_each = var.enable_stateless_rule ? [1] : []
+      content {
+        priority     = 100
+        resource_arn = aws_networkfirewall_rule_group.stateless[0].arn
+      }
     }
   }
 
   tags = var.tags
 }
 
-# Rule Groups
-resource "aws_networkfirewall_rule_group" "block_domains" {
-  capacity = 100
-  name     = format("%s-%s", var.name, "domain-block")
+# Stateful Rule Group
+resource "aws_networkfirewall_rule_group" "stateful" {
+  count    = var.enable_stateful_rule ? 1 : 0
+  capacity = 1000
+  name     = format("%s-%s", var.name, "stateful-rule")
   type     = "STATEFUL"
+  
+  rule_group {
+    rule_variables {
+      ip_sets {
+        key = "HOME_NET"
+        ip_set {
+          definition = ["10.0.0.0/8"]
+        }
+      }
+    }
+    
+    rules_source {
+      stateful_rule {
+        action = var.stateful_rule_config.action
+        header {
+          destination      = var.stateful_rule_config.destination_ip
+          destination_port = var.stateful_rule_config.destination_port
+          direction       = "ANY"
+          protocol        = var.stateful_rule_config.protocol
+          source          = var.stateful_rule_config.source_ip
+          source_port     = var.stateful_rule_config.source_port
+        }
+        rule_option {
+          keyword = "sid:1"
+        }
+      }
+    }
+
+    stateful_rule_options {
+      rule_order = var.stateful_rule_config.rule_order
+    }
+  }
+
+  tags = var.tags
+}
+
+# Stateless Rule Group
+resource "aws_networkfirewall_rule_group" "stateless" {
+  count    = var.enable_stateless_rule ? 1 : 0
+  capacity = 1000
+  name     = format("%s-%s", var.name, "stateless-rule")
+  type     = "STATELESS"
+  
   rule_group {
     rules_source {
-      rules_source_list {
-        generated_rules_type = "DENYLIST"
-        target_types        = ["HTTP_HOST", "TLS_SNI"]
-        targets             = var.blocked_domains
+      stateless_rules_and_custom_actions {
+        stateless_rule {
+          priority = 100
+          rule_definition {
+            actions = [var.stateless_rule_config.action]
+            match_attributes {
+              source {
+                address_definition = var.stateless_rule_config.source_ip
+              }
+              destination {
+                address_definition = var.stateless_rule_config.destination_ip
+              }
+            }
+          }
+        }
       }
     }
   }
