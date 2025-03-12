@@ -52,3 +52,21 @@ resource "aws_ec2_transit_gateway_vpc_attachment" "spoke" {
     Name = format("%s-%s-%s", var.name, each.key, "attachment")
   })
 }
+
+resource "aws_ec2_transit_gateway_route_table_association" "security" {
+  transit_gateway_attachment_id  = aws_ec2_transit_gateway_vpc_attachment.security.id
+  transit_gateway_route_table_id = aws_ec2_transit_gateway_route_table.security.id
+}
+
+resource "aws_ec2_transit_gateway_route_table_association" "spoke" {
+  for_each = aws_ec2_transit_gateway_vpc_attachment.spoke
+
+  transit_gateway_attachment_id  = each.value.id
+  transit_gateway_route_table_id = aws_ec2_transit_gateway_route_table.spoke.id
+}
+
+resource "aws_ec2_transit_gateway_route" "to_security" {
+  destination_cidr_block         = "0.0.0.0/0"
+  transit_gateway_attachment_id  = aws_ec2_transit_gateway_vpc_attachment.security.id
+  transit_gateway_route_table_id = aws_ec2_transit_gateway_route_table.spoke.id
+}

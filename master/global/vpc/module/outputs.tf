@@ -67,3 +67,18 @@ output "gwlbe_east_west_subnet_cidr_blocks" {
   description = "List of GWLB endpoint east-west subnet CIDR blocks"
   value       = var.is_security_vpc ? aws_subnet.gwlbe_east_west[*].cidr_block : []
 }
+
+output "gwlbe_ingress_route_table_id" {
+  description = "ID of the GWLB endpoint ingress route table"
+  value       = var.is_security_vpc ? aws_route_table.gwlbe_ingress[0].id : null
+}
+
+output "gwlbe_egress_route_table_id" {
+  description = "ID of the GWLB endpoint egress route table"
+  value       = var.is_security_vpc ? aws_route_table.gwlbe_egress[0].id : null
+}
+
+output "gwlbe_east_west_route_table_id" {
+  description = "ID of the GWLB endpoint east-west route table"
+  value       = var.is_security_vpc ? aws_route_table.gwlbe_east_west[0].id : null
+}
