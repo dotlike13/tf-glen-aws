@@ -6,6 +6,7 @@ module "security_vpc" {
   vpc_cidr        = "10.0.0.0/16"
   is_security_vpc = true
   
+  is_nat_gw = false
   availability_zones = [
     "ap-northeast-2a"
     # "ap-northeast-2c"

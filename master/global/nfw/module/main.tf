@@ -4,7 +4,10 @@ resource "aws_lb" "gwlb" {
   load_balancer_type = "gateway"
   subnets            = var.firewall_subnet_ids
 
-  tags = var.tags
+
+  tags = merge(var.tags, {
+    Name = format("%s-%s", var.name, "gwlb")
+  })
 }
 
 # Gateway Load Balancer Target Group
@@ -34,7 +37,9 @@ resource "aws_networkfirewall_firewall" "main" {
     }
   }
 
-  tags = var.tags
+  tags = merge(var.tags, {
+    Name = format("%s-%s", var.name, "nfw")
+  })
 }
 
 # Gateway Load Balancer VPC Endpoint Service
@@ -45,10 +50,11 @@ resource "aws_vpc_endpoint_service" "gwlb" {
 
 # GWLB Endpoints
 resource "aws_vpc_endpoint" "ingress" {
-  service_name      = aws_vpc_endpoint_service.gwlb.service_name
-  subnet_ids        = var.ingress_subnet_ids
+  count           = var.enable_gwlbe_ingress ? 1 : 0
+  service_name    = aws_vpc_endpoint_service.gwlb.service_name
+  subnet_ids      = var.ingress_subnet_ids
   vpc_endpoint_type = "GatewayLoadBalancer"
-  vpc_id            = var.security_vpc_id
+  vpc_id          = var.security_vpc_id
 
   tags = merge(var.tags, {
     Name = format("%s-%s", var.name, "gwlbe-ingress")
@@ -56,10 +62,11 @@ resource "aws_vpc_endpoint" "ingress" {
 }
 
 resource "aws_vpc_endpoint" "egress" {
-  service_name      = aws_vpc_endpoint_service.gwlb.service_name
-  subnet_ids        = var.egress_subnet_ids
+  count           = var.enable_gwlbe_egress ? 1 : 0
+  service_name    = aws_vpc_endpoint_service.gwlb.service_name
+  subnet_ids      = var.egress_subnet_ids
   vpc_endpoint_type = "GatewayLoadBalancer"
-  vpc_id            = var.security_vpc_id
+  vpc_id          = var.security_vpc_id
 
   tags = merge(var.tags, {
     Name = format("%s-%s", var.name, "gwlbe-egress")
@@ -67,10 +74,11 @@ resource "aws_vpc_endpoint" "egress" {
 }
 
 resource "aws_vpc_endpoint" "east_west" {
-  service_name      = aws_vpc_endpoint_service.gwlb.service_name
-  subnet_ids        = var.east_west_subnet_ids
+  count           = var.enable_gwlbe_east_west ? 1 : 0
+  service_name    = aws_vpc_endpoint_service.gwlb.service_name
+  subnet_ids      = var.east_west_subnet_ids
   vpc_endpoint_type = "GatewayLoadBalancer"
-  vpc_id            = var.security_vpc_id
+  vpc_id          = var.security_vpc_id
 
   tags = merge(var.tags, {
     Name = format("%s-%s", var.name, "gwlbe-east-west")
@@ -107,7 +115,7 @@ resource "aws_networkfirewall_firewall_policy" "main" {
 # Stateful Rule Group
 resource "aws_networkfirewall_rule_group" "stateful" {
   count    = var.enable_stateful_rule ? 1 : 0
-  capacity = 1000
+  capacity = 100
   name     = format("%s-%s", var.name, "stateful-rule")
   type     = "STATEFUL"
   
@@ -149,7 +157,7 @@ resource "aws_networkfirewall_rule_group" "stateful" {
 # Stateless Rule Group
 resource "aws_networkfirewall_rule_group" "stateless" {
   count    = var.enable_stateless_rule ? 1 : 0
-  capacity = 1000
+  capacity = 100
   name     = format("%s-%s", var.name, "stateless-rule")
   type     = "STATELESS"
   

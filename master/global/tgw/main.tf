@@ -12,10 +12,10 @@ module "tgw" {
       vpc_id     = data.terraform_remote_state.vpc.outputs.vpc_a.vpc_id
       subnet_ids = data.terraform_remote_state.vpc.outputs.vpc_a.private_subnet_ids
     }
-    vpc-b = {
-      vpc_id     = data.terraform_remote_state.vpc.outputs.vpc_b.vpc_id
-      subnet_ids = data.terraform_remote_state.vpc.outputs.vpc_b.private_subnet_ids
-    }
+    # vpc-b = {
+    #   vpc_id     = data.terraform_remote_state.vpc.outputs.vpc_b.vpc_id
+    #   subnet_ids = data.terraform_remote_state.vpc.outputs.vpc_b.private_subnet_ids
+    # }
   }
   
   tags = merge(local.default_tags, {

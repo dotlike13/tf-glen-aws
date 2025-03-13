@@ -20,17 +20,17 @@ output "gwlb_endpoint_service_name" {
 
 output "ingress_endpoint_id" {
   description = "The ID of the ingress GWLB endpoint"
-  value       = aws_vpc_endpoint.ingress.id
+  value       = var.enable_gwlbe_ingress ? aws_vpc_endpoint.ingress[0].id : null
 }
 
 output "egress_endpoint_id" {
   description = "The ID of the egress GWLB endpoint"
-  value       = aws_vpc_endpoint.egress.id
+  value       = var.enable_gwlbe_egress ? aws_vpc_endpoint.egress[0].id : null
 }
 
 output "east_west_endpoint_id" {
   description = "The ID of the east-west GWLB endpoint"
-  value       = aws_vpc_endpoint.east_west.id
+  value       = var.enable_gwlbe_east_west ? aws_vpc_endpoint.east_west[0].id : null
 }
 
 output "firewall_status" {

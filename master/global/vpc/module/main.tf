@@ -155,7 +155,7 @@ resource "aws_internet_gateway" "main" {
 
 # NAT Gateway 추가 필요
 resource "aws_eip" "nat" {
-  count = var.is_security_vpc ? length(var.availability_zones) : 0
+  count = var.is_security_vpc && var.is_nat_gw ? length(var.availability_zones) : 0
   domain = "vpc"
 
   tags = merge(var.tags, {
@@ -164,7 +164,7 @@ resource "aws_eip" "nat" {
 }
 
 resource "aws_nat_gateway" "main" {
-  count         = var.is_security_vpc ? length(var.availability_zones) : 0
+  count         = var.is_security_vpc && var.is_nat_gw ? length(var.availability_zones) : 0
   allocation_id = aws_eip.nat[count.index].id
   subnet_id     = aws_subnet.public[count.index].id
 
@@ -183,7 +183,7 @@ resource "aws_route" "public_igw" {
 
 # Private Route Table에 NAT Gateway 라우팅 추가
 resource "aws_route" "private_nat" {
-  count                  = var.is_security_vpc ? length(var.availability_zones) : 0
+  count                  = var.is_security_vpc && var.is_nat_gw ? length(var.availability_zones) : 0
   route_table_id         = aws_route_table.private.id
   destination_cidr_block = "0.0.0.0/0"
   nat_gateway_id         = aws_nat_gateway.main[count.index].id

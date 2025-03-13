@@ -106,4 +106,22 @@ variable "stateless_rule_config" {
     condition = contains(["aws:pass", "aws:drop", "aws:forward_to_sfe"], var.stateless_rule_config.action)
     error_message = "Action must be one of: aws:pass, aws:drop, aws:forward_to_sfe"
   }
+}
+
+variable "enable_gwlbe_ingress" {
+  type        = bool
+  description = "Enable GWLB Endpoint for ingress traffic"
+  default     = true
+}
+
+variable "enable_gwlbe_egress" {
+  type        = bool
+  description = "Enable GWLB Endpoint for egress traffic"
+  default     = true
+}
+
+variable "enable_gwlbe_east_west" {
+  type        = bool
+  description = "Enable GWLB Endpoint for east-west traffic"
+  default     = true
 } 

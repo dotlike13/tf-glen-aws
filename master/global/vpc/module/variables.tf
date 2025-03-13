@@ -19,6 +19,12 @@ variable "is_security_vpc" {
   default     = false
 }
 
+variable "is_nat_gw" {
+  type        = bool
+  description = "Whether this nat gateway is needed"
+  default     = false
+}
+
 variable "tags" {
   type        = map(string)
   description = "Tags for all resources"

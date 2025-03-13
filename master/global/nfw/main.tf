@@ -6,10 +6,15 @@ module "network_firewall" {
   
   prefix = "test"
 
-  firewall_subnet_ids   = data.terraform_remote_state.vpc.outputs.security_vpc.private_subnet_ids
-  ingress_subnet_ids    = data.terraform_remote_state.vpc.outputs.security_vpc.gwlbe_ingress_subnet_ids
-  egress_subnet_ids     = data.terraform_remote_state.vpc.outputs.security_vpc.gwlbe_egress_subnet_ids
-  east_west_subnet_ids  = data.terraform_remote_state.vpc.outputs.security_vpc.gwlbe_east_west_subnet_ids
+  firewall_subnet_ids   = [data.terraform_remote_state.vpc.outputs.security_vpc.private_subnet_ids[0]]
+  ingress_subnet_ids    = [data.terraform_remote_state.vpc.outputs.security_vpc.gwlbe_ingress_subnet_ids[0]]
+  egress_subnet_ids     = [data.terraform_remote_state.vpc.outputs.security_vpc.gwlbe_egress_subnet_ids[0]]
+  east_west_subnet_ids  = [data.terraform_remote_state.vpc.outputs.security_vpc.gwlbe_east_west_subnet_ids[0]]
+
+  # GWLB Endpoint 활성화 설정
+  enable_gwlbe_ingress   = true    # 인그레스 트래픽 필요
+  enable_gwlbe_egress    = true    # 이그레스 트래픽 필요
+  enable_gwlbe_east_west = false   # 테스트에서는 비활성화
 
   enable_stateful_rule  = true   # stateful 규칙 활성화
   enable_stateless_rule = true   # stateless 규칙 활성화
