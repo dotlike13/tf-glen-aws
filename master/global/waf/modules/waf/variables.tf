@@ -38,14 +38,16 @@ variable "web_acls" {
       }))
     }))
     ip_set_rules = list(object({
-      name        = string
-      priority    = number
-      ip_set_name = string
-      addresses   = list(string)
-      action      = string # "allow", "block", or "count"
+      name         = string
+      priority     = number
+      ip_set_name  = string
+      action       = string # "allow", "block", or "count"
+      use_existing = optional(bool, false)   # true면 data source 사용, false면 새로 생성
+      addresses    = optional(list(string), []) # use_existing = false일 때 필수
     }))
     resource_arns   = list(string)
     logging_enabled = optional(bool, false)
+    log_group_name  = optional(string) # 기존 CloudWatch Log Group 이름
     # ddos_protection = optional(object({
     #   alb_low_reputation_mode = string
     # }))

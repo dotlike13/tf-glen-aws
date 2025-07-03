@@ -1,3 +1,67 @@
+# 기존 IP Set 참조 (ip_set_name이 지정된 경우)
+data "aws_wafv2_ip_set" "existing" {
+  for_each = { for rule in flatten([
+    for acl in var.web_acls : [
+      for ip_rule in acl.ip_set_rules : {
+        name = ip_rule.ip_set_name
+        use_existing = ip_rule.use_existing
+      } if ip_rule.use_existing == true
+    ]
+  ]) : rule.name => rule }
+
+  name  = each.key
+  scope = "REGIONAL"
+}
+
+# 새로운 IP Set 생성 (use_existing = false인 경우)
+resource "aws_wafv2_ip_set" "this" {
+  for_each = { for rule in flatten([
+    for acl in var.web_acls : [
+      for ip_rule in acl.ip_set_rules : {
+        name = ip_rule.ip_set_name
+        addresses = ip_rule.addresses
+      } if ip_rule.use_existing == false
+    ]
+  ]) : rule.name => rule }
+
+  name               = each.key
+  description        = "IP set for ${each.key}"
+  scope             = "REGIONAL"
+  ip_address_version = "IPV4"
+  addresses         = each.value.addresses
+
+  tags = merge(
+    var.tags,
+    {
+      Name = each.key
+    }
+  )
+}
+
+# 기존 CloudWatch Log Group 참조
+data "aws_cloudwatch_log_group" "existing" {
+  for_each = { for name, acl in var.web_acls : name => acl.log_group_name 
+    if acl.logging_enabled == true && acl.log_group_name != null }
+
+  name = each.value
+}
+
+# CloudWatch Log Group for WAF Logs (log_group_name이 지정되지 않은 경우에만)
+resource "aws_cloudwatch_log_group" "waf_logs" {
+  for_each = { for name, acl in var.web_acls : name => acl 
+    if acl.logging_enabled == true && (acl.log_group_name == null || acl.log_group_name == "") }
+
+  name              = "/aws/waf/${each.value.name}"
+  retention_in_days = 30
+
+  tags = merge(
+    var.tags,
+    {
+      Name = "/aws/waf/${each.value.name}"
+    }
+  )
+}
+
 # WAF v2 Web ACL 생성
 resource "aws_wafv2_web_acl" "this" {
   for_each = var.web_acls
@@ -278,7 +342,7 @@ resource "aws_wafv2_web_acl" "this" {
 
       statement {
         ip_set_reference_statement {
-          arn = aws_wafv2_ip_set.this[rule.value.ip_set_name].arn
+          arn = rule.value.use_existing ? data.aws_wafv2_ip_set.existing[rule.value.ip_set_name].arn : aws_wafv2_ip_set.this[rule.value.ip_set_name].arn
         }
       }
 
@@ -314,31 +378,6 @@ resource "aws_wafv2_web_acl" "this" {
   )
 }
 
-# IP Sets
-resource "aws_wafv2_ip_set" "this" {
-  for_each = { for rule in flatten([
-    for acl in var.web_acls : [
-      for ip_rule in acl.ip_set_rules : {
-        name      = ip_rule.ip_set_name
-        addresses = ip_rule.addresses
-      }
-    ]
-  ]) : rule.name => rule }
-
-  name               = each.key
-  description        = "IP set for ${each.key}"
-  scope             = "REGIONAL"
-  ip_address_version = "IPV4"
-  addresses          = each.value.addresses
-
-  tags = merge(
-    var.tags,
-    {
-      Name = each.key
-    }
-  )
-}
-
 # Web ACL Association
 resource "aws_wafv2_web_acl_association" "this" {
   for_each = { for arn in flatten([
@@ -358,21 +397,10 @@ resource "aws_wafv2_web_acl_association" "this" {
 resource "aws_wafv2_web_acl_logging_configuration" "this" {
   for_each = { for name, acl in var.web_acls : name => acl if acl.logging_enabled }
 
-  log_destination_configs = [aws_cloudwatch_log_group.waf_logs[each.key].arn]
-  resource_arn           = aws_wafv2_web_acl.this[each.key].arn
-}
-
-# CloudWatch Log Group for WAF Logs
-resource "aws_cloudwatch_log_group" "waf_logs" {
-  for_each = { for name, acl in var.web_acls : name => acl if acl.logging_enabled }
-
-  name              = "/aws/waf/${each.value.name}"
-  retention_in_days = 30
-
-  tags = merge(
-    var.tags,
-    {
-      Name = "/aws/waf/${each.value.name}"
-    }
-  )
+  log_destination_configs = [
+    lookup(data.aws_cloudwatch_log_group.existing, each.key, null) != null ? 
+    data.aws_cloudwatch_log_group.existing[each.key].arn : 
+    aws_cloudwatch_log_group.waf_logs[each.key].arn
+  ]
+  resource_arn = aws_wafv2_web_acl.this[each.key].arn
 }
