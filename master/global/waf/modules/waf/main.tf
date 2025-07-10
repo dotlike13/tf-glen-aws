@@ -13,6 +13,18 @@ data "aws_wafv2_ip_set" "existing" {
   scope = "REGIONAL"
 }
 
+# 기존 Rule Group 참조
+data "aws_wafv2_rule_group" "existing" {
+  for_each = { for rule in flatten([
+    for acl in var.web_acls : [
+      for rule in acl.rule_group_rules : rule.rule_group_name
+    ]
+  ]) : rule => rule }
+
+  name  = each.key
+  scope = "REGIONAL"
+}
+
 # 새로운 IP Set 생성 (use_existing = false인 경우)
 resource "aws_wafv2_ip_set" "this" {
   for_each = { for rule in flatten([
@@ -30,12 +42,6 @@ resource "aws_wafv2_ip_set" "this" {
   ip_address_version = "IPV4"
   addresses         = each.value.addresses
 
-  tags = merge(
-    var.tags,
-    {
-      Name = each.key
-    }
-  )
 }
 
 # 기존 CloudWatch Log Group 참조
@@ -54,12 +60,111 @@ resource "aws_cloudwatch_log_group" "waf_logs" {
   name              = "/aws/waf/${each.value.name}"
   retention_in_days = 30
 
-  tags = merge(
-    var.tags,
-    {
-      Name = "/aws/waf/${each.value.name}"
+}
+
+# Custom Rule Types
+locals {
+  custom_rule_types = {
+    host_match = {
+      statement = {
+        byte_match_statement = {
+          field_to_match = {
+            single_header = {
+              name = "host"
+            }
+          }
+          positional_constraint = "EXACTLY"
+          text_transformation = [
+            {
+              priority = 0
+              type     = "NONE"
+            }
+          ]
+        }
+      }
     }
-  )
+    path_match = {
+      statement = {
+        regex_match_statement = {
+          field_to_match = {
+            uri_path = {}
+          }
+          text_transformation = [
+            {
+              priority = 0
+              type     = "NONE"
+            }
+          ]
+        }
+      }
+    }
+    host_path_match = {
+      statement = {
+        and_statement = {
+          statements = [
+            {
+              byte_match_statement = {
+                field_to_match = {
+                  single_header = {
+                    name = "host"
+                  }
+                }
+                positional_constraint = "EXACTLY"
+                text_transformation = [
+                  {
+                    priority = 0
+                    type     = "NONE"
+                  }
+                ]
+              }
+            },
+            {
+              regex_match_statement = {
+                field_to_match = {
+                  uri_path = {}
+                }
+                text_transformation = [
+                  {
+                    priority = 0
+                    type     = "NONE"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}
+
+# ALB 데이터 소스
+data "aws_lb" "existing" {
+  for_each = { for item in flatten([
+    for acl_name, acl in var.web_acls : [
+      for alb_name in acl.association_alb_name : {
+        acl_name = acl_name
+        alb_name = alb_name
+      }
+    ]
+  ]) : "${item.acl_name}-${item.alb_name}" => item }
+
+  name = each.value.alb_name
+}
+
+# WAF Web ACL Association
+resource "aws_wafv2_web_acl_association" "this" {
+  for_each = { for item in flatten([
+    for acl_name, acl in var.web_acls : [
+      for alb_name in(acl.association_alb_name != null ? acl.association_alb_name : []) : {
+        acl_name = acl_name
+        alb_name = alb_name
+      }
+    ]
+  ]) : "${item.acl_name}-${item.alb_name}" => item }
+
+  resource_arn = data.aws_lb.existing[each.key].arn
+  web_acl_arn  = aws_wafv2_web_acl.this[each.value.acl_name].arn
 }
 
 # WAF v2 Web ACL 생성
@@ -78,6 +183,38 @@ resource "aws_wafv2_web_acl" "this" {
     dynamic "block" {
       for_each = each.value.default_action == "block" ? [1] : []
       content {}
+    }
+  }
+
+  # Rule Group Rules
+  dynamic "rule" {
+    for_each = each.value.rule_group_rules != null ? each.value.rule_group_rules : []
+    content {
+      name     = rule.value.name
+      priority = rule.value.priority
+
+      override_action {
+        dynamic "none" {
+          for_each = rule.value.action == "override_none" ? [1] : []
+          content {}
+        }
+        dynamic "count" {
+          for_each = rule.value.action == "override_count" ? [1] : []
+          content {}
+        }
+      }
+
+      statement {
+        rule_group_reference_statement {
+          arn = data.aws_wafv2_rule_group.existing[rule.value.rule_group_name].arn
+        }
+      }
+
+      visibility_config {
+        cloudwatch_metrics_enabled = true
+        metric_name               = rule.value.name
+        sampled_requests_enabled  = true
+      }
     }
   }
 
@@ -133,7 +270,7 @@ resource "aws_wafv2_web_acl" "this" {
 
       visibility_config {
         cloudwatch_metrics_enabled = true
-        metric_name               = replace("${rule.value.name}Metric", "-", "")
+        metric_name               = rule.value.name
         sampled_requests_enabled  = true
       }
     }
@@ -167,18 +304,11 @@ resource "aws_wafv2_web_acl" "this" {
         }
       }
 
-      dynamic "action" {
-        for_each = rule.value.action == "challenge" ? [1] : []
-        content {
-          challenge {}
-        }
-      }
-
       statement {
         dynamic "byte_match_statement" {
           for_each = rule.value.type == "host_match" ? [1] : []
           content {
-            search_string = rule.value.host
+            search_string = rule.value.search_string
             field_to_match {
               single_header {
                 name = "host"
@@ -195,7 +325,7 @@ resource "aws_wafv2_web_acl" "this" {
         dynamic "regex_match_statement" {
           for_each = rule.value.type == "path_match" ? [1] : []
           content {
-            regex_string = rule.value.path_pattern
+            regex_string = rule.value.regex_string
             field_to_match {
               uri_path {}
             }
@@ -242,7 +372,7 @@ resource "aws_wafv2_web_acl" "this" {
 
       visibility_config {
         cloudwatch_metrics_enabled = true
-        metric_name               = replace("${rule.value.name}Metric", "-", "")
+        metric_name               = rule.value.custom_rule_metric_name
         sampled_requests_enabled  = true
       }
     }
@@ -266,9 +396,17 @@ resource "aws_wafv2_web_acl" "this" {
         for_each = rule.value.action == "block" ? [1] : []
         content {
           block {
-            custom_response {
-              response_code = rule.value.response_code
-              custom_response_body_key = rule.value.name
+            dynamic "custom_response" {
+              for_each = try(rule.value.custom_response != null ? [rule.value.custom_response] : [], [])
+              content {
+                response_code = custom_response.value.response_code
+                dynamic "custom_response_body_key" {
+                  for_each = try(custom_response.value.custom_response_body_key != null ? [custom_response.value.custom_response_body_key] : [], [])
+                  content {
+                    key = custom_response_body_key.value
+                  }
+                }
+              }
             }
           }
         }
@@ -292,12 +430,34 @@ resource "aws_wafv2_web_acl" "this" {
         rate_based_statement {
           limit              = rule.value.limit
           aggregate_key_type = "IP"
+          evaluation_window_sec = rule.value.evaluation_window_sec
 
           dynamic "scope_down_statement" {
             for_each = rule.value.scope_down_statement != null ? [rule.value.scope_down_statement] : []
             content {
-              ip_set_reference_statement {
-                arn = scope_down_statement.value.ip_set_reference_statement.arn
+              dynamic "byte_match_statement" {
+                for_each = scope_down_statement.value.byte_match_statement != null ? [scope_down_statement.value.byte_match_statement] : []
+                content {
+                  search_string = byte_match_statement.value.search_string
+                  field_to_match {
+                    dynamic "uri_path" {
+                      for_each = byte_match_statement.value.field_to_match.uri_path != null ? [1] : []
+                      content {}
+                    }
+                  }
+                  positional_constraint = byte_match_statement.value.positional_constraint
+                  text_transformation {
+                    priority = byte_match_statement.value.text_transformation.priority
+                    type     = byte_match_statement.value.text_transformation.type
+                  }
+                }
+              }
+
+              dynamic "ip_set_reference_statement" {
+                for_each = scope_down_statement.value.ip_set_reference_statement != null ? [scope_down_statement.value.ip_set_reference_statement] : []
+                content {
+                  arn = ip_set_reference_statement.value.arn
+                }
               }
             }
           }
@@ -306,7 +466,7 @@ resource "aws_wafv2_web_acl" "this" {
 
       visibility_config {
         cloudwatch_metrics_enabled = true
-        metric_name               = replace("${rule.value.name}Metric", "-", "")
+        metric_name               = rule.value.name
         sampled_requests_enabled  = true
       }
     }
@@ -318,7 +478,7 @@ resource "aws_wafv2_web_acl" "this" {
     content {
       name     = rule.value.name
       priority = rule.value.priority
-
+      
       dynamic "action" {
         for_each = rule.value.action == "allow" ? [1] : []
         content {
@@ -340,6 +500,20 @@ resource "aws_wafv2_web_acl" "this" {
         }
       }
 
+      dynamic "override_action" {
+        for_each = rule.value.action == "override_none" ? [1] : []
+        content {
+          none {}
+        }
+      }
+
+      dynamic "override_action" {
+        for_each = rule.value.action == "override_count" ? [1] : []
+        content {
+          count {}
+        }
+      }
+
       statement {
         ip_set_reference_statement {
           arn = rule.value.use_existing ? data.aws_wafv2_ip_set.existing[rule.value.ip_set_name].arn : aws_wafv2_ip_set.this[rule.value.ip_set_name].arn
@@ -348,49 +522,28 @@ resource "aws_wafv2_web_acl" "this" {
 
       visibility_config {
         cloudwatch_metrics_enabled = true
-        metric_name               = replace("${rule.value.name}Metric", "-", "")
+        metric_name               = rule.value.name
         sampled_requests_enabled  = true
       }
     }
   }
 
-  # Custom Response Bodies
-  dynamic "custom_response_body" {
-    for_each = { for rule in each.value.ip_rate_limit_rules : rule.name => rule if rule.action == "block" }
-    content {
-      key          = custom_response_body.value.name
-      content_type = "TEXT_PLAIN"
-      content      = custom_response_body.value.response_body
-    }
-  }
+  # # Custom Response Bodies
+  # dynamic "custom_response_body" {
+  #   for_each = { for rule in each.value.ip_rate_limit_rules : rule.name => rule if rule.action == "block" }
+  #   content {
+  #     key          = custom_response_body.value.name
+  #     content_type = "TEXT_PLAIN"
+  #     content      = custom_response_body.value.response_body
+  #   }
+  # }
 
   visibility_config {
     cloudwatch_metrics_enabled = true
-    metric_name               = replace("${each.value.name}Metric", "-", "")
+    metric_name               = each.value.name
     sampled_requests_enabled  = true
   }
 
-  tags = merge(
-    var.tags,
-    {
-      Name = each.value.name
-    }
-  )
-}
-
-# Web ACL Association
-resource "aws_wafv2_web_acl_association" "this" {
-  for_each = { for arn in flatten([
-    for name, acl in var.web_acls : [
-      for resource_arn in acl.resource_arns : {
-        acl_name = name
-        arn      = resource_arn
-      }
-    ]
-  ]) : arn.arn => arn }
-
-  resource_arn = each.key
-  web_acl_arn  = aws_wafv2_web_acl.this[each.value.acl_name].arn
 }
 
 # Logging Configuration
@@ -403,4 +556,7 @@ resource "aws_wafv2_web_acl_logging_configuration" "this" {
     aws_cloudwatch_log_group.waf_logs[each.key].arn
   ]
   resource_arn = aws_wafv2_web_acl.this[each.key].arn
+
+  
+  depends_on = [aws_wafv2_web_acl.this]
 }
